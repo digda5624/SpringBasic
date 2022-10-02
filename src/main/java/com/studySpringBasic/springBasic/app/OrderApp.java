@@ -1,4 +1,4 @@
-package com.studySpringBasic.springBasic.order;
+package com.studySpringBasic.springBasic.app;
 
 import com.studySpringBasic.springBasic.config.AppConfig;
 import com.studySpringBasic.springBasic.discount.FixDiscountPolicy;
@@ -8,6 +8,7 @@ import com.studySpringBasic.springBasic.entity.Order;
 import com.studySpringBasic.springBasic.member.repository.MemberServiceImpl;
 import com.studySpringBasic.springBasic.member.repository.MemoryMemberRepository;
 import com.studySpringBasic.springBasic.member.service.MemberService;
+import com.studySpringBasic.springBasic.order.OrderService;
 
 public class OrderApp {
 

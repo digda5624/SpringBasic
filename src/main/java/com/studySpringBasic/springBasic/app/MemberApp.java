@@ -1,4 +1,4 @@
-package com.studySpringBasic.springBasic.member;
+package com.studySpringBasic.springBasic.app;
 
 import com.studySpringBasic.springBasic.config.AppConfig;
 import com.studySpringBasic.springBasic.entity.Grade;
