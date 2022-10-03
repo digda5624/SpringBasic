@@ -7,9 +7,13 @@ import com.studySpringBasic.springBasic.entity.Member;
 import com.studySpringBasic.springBasic.entity.Order;
 import com.studySpringBasic.springBasic.member.repository.MemberRepository;
 import com.studySpringBasic.springBasic.member.repository.MemoryMemberRepository;
+import lombok.Getter;
 import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
 
 @RequiredArgsConstructor
+@Getter
+@Component
 public class OrderServiceImpl implements OrderService {
 
 //    private final MemberRepository memberRepository = new MemoryMemberRepository();

@@ -110,3 +110,76 @@ spring이 없었다면 개발자들은 config 정보들을 통해서 어플리�
 공유 객체에 대해서 stateless 한 상태를 유지해야 하고, thread 간의 동시성을 고려하여 stack 영역의 데이터를 건드리도록
 프로그래머가 신경을 써야 한다.
 
+또한 @Bean 을 통해서 주입을 하는 경우 생성자 level 에서 여러개의 싱글톤 객체가 생성된다고 생각 할 수 있는데,
+spring은 @Configuration 이 붙어 있는 클래스를 CGLIB 객체로 새로 만들어(프록시 활용) 다른 동작을 하게 한다.
+
+수도 코드로 보면 다음과 같아진다.
+
+🖥 재정의된 Configuration class 의 내부 로직
+```java
+@Bean
+public MemberRepository memberRepository() {
+        if (memoryMemberRepository가 이미 스프링 컨테이너에 등록되어 있으면?) { 
+            return 스프링 컨테이너에서 찾아서 반환;
+        } else { 
+            //스프링 컨테이너에 없으면
+        기존 로직을 호출해서 MemoryMemberRepository를 생성하고 스프링 컨테이너에 등록 return 반환
+        } 
+}
+```
+
+따라서 @Configuration 을 적용하지 않고 작성을 하게 되면 싱글톤을 보장하지 않게 된다는 점을 유의하자.
+
+실제로도 각 @Bean에 넣었던 내용들이 전부 출력되는 것을 알 수 있다.
+
+## @ComponentScan, @Component
+간단하게 말해 기존 @Configuration + @Bean 조합을 => @Component + @ComponentScan 조합으로 변경한다.
+
+클래스 단에 @Component 어노테이션만 달아주게 되면 된다. @ComponentScan 대상을 정할 수 있다.
+지정을 하지 않게 되면 현재 패키지가 시작위치가 되고 하위 패키지를 뒤지게 된다.
+
+@Component, @Controller, @Service, @Repository, @Configuration 은 내부적으로 @Component 가 붙어있다.<br>
+참고로 이 어노테이션이 특정 어노테이션을 들고 있는 것을 인식할 수 있는 것은 자바 언어가 지원하는 기능은 아니고, Spring 이 지원하는 기능이다.
+
+또한 @Repository 는 스프링 데이터 접근 계층으로 인식하고, 데이터 계층의 예외를 스프링 예외로 변환시켜준다.
+
+필드의 의존관계에 대해서 주입을 하게 되며 주입관련 내용으로는 생성자, 필드, setter 주입이 있다.
+
+## 같은 빈이름으로 등록 -> 충돌
+Conflict 가 난다.
+
+자동 빈등록(ComponentScan) + 수동 빈등록(@Bean) == overriding이 되어 버린다.
+> Overriding bean definition for bean 'memoryMemberRepository' with a different definition
+
+spring Boot 기준으로는 override 하지 않고 팅겨버린다.
+
+## spring 의 의존관계 주입 life-cycle
+spring은 용빼는 재주가 있는 것이 아니다. 결국 spring-Container에 등록을 할 때 객체를 올리고 의존 관계를 주입하게 된다.
+
+1. 객체 생성 후 (스프링 컨테이너에 등록 후)
+2. 의존 관계 주입
+
+생성자 주입의 경우 1, 2번이 동시에 일어나게 된다. 필드 주입,  수정자 주입의 경우 1번후 2번이 일어나게 된다
+
+생성자 주입을 선택해라!
+1. 의존관계를 변경할 일이 없다. 불변해야한다. (대부분)
+2. Test 코드와의 관련성 Test 코드를 작성할 때 순수한 java 코드로 Test를 작성하고 싶다면... 후에 Mock 객체를 사용할 때도 생성자를 통한 test
+target 설정이 편리하다. 물론 injectMock을 쓸때도 마찬가지
+3. final 키워드를 통한 컴파일 오류 잡아내기가 가능해진다.
+
+## @Qualifier tips
+기존에는 Qualifier(value = "") 형식으로 사용했지만 컴파일 시점에 매칭을 잡아내기 힘들다는 점이 있다.
+만약 "mainDataBase" string 에 오타가 있다면? 따라서 spring에서 제공하는 어노테이션 커스텀을 사용하여 쉽게 해보자
+
+🖥 @Qualifier custom
+```java
+@Target(ElementType.TYPE)
+@Retention(RetentionPolicy.RUNTIME)
+@Documented
+@Qualifier("mainDiscountPolicy")
+public @interface MainDiscountPolicy {
+}
+```
+
+## Collection 을 이용한 spring의 전략패턴 제공
+

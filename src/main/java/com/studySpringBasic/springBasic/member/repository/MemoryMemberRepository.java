@@ -1,10 +1,12 @@
 package com.studySpringBasic.springBasic.member.repository;
 
 import com.studySpringBasic.springBasic.entity.Member;
+import org.springframework.stereotype.Component;
 
 import java.util.HashMap;
 import java.util.Map;
 
+@Component
 public class MemoryMemberRepository implements MemberRepository {
 
     /**
