@@ -182,4 +182,162 @@ public @interface MainDiscountPolicy {
 ```
 
 ## Collection 을 이용한 spring의 전략패턴 제공
+동일 타입의 bean 객체를 가져오려고 하면 오류가 난다. NoUniqueBeanDefinitionException 기본적으로 어플리케이션에서
+전략을 동적으로 교체하거나, 여러개를 가질 일이 거의 없기 때문에 대부분의 로직은 @Primary 혹은 @Qualifier 로 해결이 가능하다.
+하지만 만약 여러개의 전략이 필요한 경우라면??
 
+🖥 여러가지 전략 패턴을 지원하는 spring
+```java
+public static class DiscountService{
+        private final Map<String, DiscountPolicy> policyMap;
+        private final List<DiscountPolicy> policies;
+
+        @Autowired
+        public DiscountService(Map<String, DiscountPolicy> policyMap, List<DiscountPolicy> policies) {
+            this.policyMap = policyMap;
+            this.policies = policies;
+            System.out.println("policyMap = " + policyMap);
+            System.out.println("policies = " + policies);
+        }
+
+        public int discount(Member member, int price, Strategy strategy){
+            DiscountPolicy discountPolicy = policyMap.get(strategy.getPolicy());
+            return discountPolicy.discount(member, price);
+        }
+}
+```
+필드로 다양한 DiscountPolicy 전략을 가질 수 있는 것을 확인해 볼 수 있다.
+
+추가적으로 Strategy라는 Enum 타입 선언으로 깔끔하게 코드를 뽑아 낼 수 있다.
+
+🖥 Strategy Enum
+```java
+@Getter
+@AllArgsConstructor
+public enum Strategy {
+    FIX_POLICY("fixDiscountPolicy"),
+    RATE_POLICY("rateDiscountPolicy");
+
+    String policy;
+}
+```
+
+## spring 앱을 개발할 때 나오는 개괄적인 bean 종류
+1. 업무 로직 빈 - 웹을 지원하는 컨트롤러, 핵심 비지지스 로직이 있는 서비스, 리포지토리 등이 모두 업무 로직
+2. 기술 지원 빈 - 기술적인 문제나 공통 관심사(AOP)를 처리할 때 주로 사용
+3. 비즈니스 로직이 다양한 전략을 가져야 할 경우
+
+1번은 대부분 자동 빈등록, 2번은 기술을 명확하게 들어내야할 수록 편하기 때문에 수동빈 등록 권장
+3번의 경우도 마찬가지로 전략에 대한 Config를 따로 빼내어서 전략들을 개괄적으로 보여주는 것이 편리하다.
+
+🖥 전략에 대한 Config 명확하게
+```java
+@Configuration
+public class DiscountPolicyConfig {
+    @Bean
+    public DiscountPolicy rateDiscountPolicy() {
+        return new RateDiscountPolicy();
+    }
+    @Bean
+    public DiscountPolicy fixDiscountPolicy() {
+        return new FixDiscountPolicy();
+    }
+}
+```
+
+## 빈 생명주기 콜백
+1. 데이터베이스 커넥션은 어떻게 생성이 되는 걸까? => 데이터베이스 커넥션 풀의 경우에 미리 커넥션을 만들고 할당해 놓는다
+2. 네트워크 소캣을 미리 열어둘 수 있다면?
+3. 어플리케이션 종료 시점에 사용하던 resources 들을 어떻게 release 시킬까? 
+
+먼저 spring bean은 객체를 생성 -> 의존관계 주입의 순서를 따른다.
+
+🖥 빈 생성과 의존관계 주입
+```java
+@Configuration
+static class BeanLifeCycle {
+
+    @Bean
+    public NetworkClient networkClient(){
+        // spring 은 다음과 같은 의존관계 주입 순서를 가진다.
+
+        // 1. 객체 생성
+        NetworkClient networkClient = new NetworkClient();
+
+        // 2. 의존관계 주입 완료 여기서는 setter 로 퉁치자 물론 예시가 부정확하지만 대략 이런 느낌이라고 생각하자.
+        networkClient.setUrl("http://digda5624/test");
+        return networkClient;
+        }
+}
+```
+스프링 빈은 객체를 생성하고, 의존관계 주입이 다 끝난 다음에야 필요한 데이터를 사용할 수 있는 준비가 완료
+따라서 초기화 작업은 의존관계 주입이 모두 완료되고 난 다음에 호출해야 한다.
+
+=> 이것을 어떻게 알 것인가?
+
+스프링은 의존관계 주입이 완료되면 스프링 빈에게 콜백 메서드를 통해서 초기화 시점을 알려주는 다양한 기능 제공(후에 빈 후처리기 라고 함)
+또한 스프링 컨테이너가 종료되기 직전에 소멸 콜백을 준다. 
+
+## 용어 정리 해보기 
+여기서 참 재밌는 메서드 명이 나온다. 예전에 봤을 때는 몰랐던 afterPropertiesSet 이 그것이다.
+
+AfterPropertiesSet은 말 그대로 의존관계 주입이후를 의미하게 된다.
+
+코드 level 에서 살펴보자
+
+🖥 AfterPropertiesSet, Destroy
+```java
+public class NetworkClient implements InitializingBean, DisposableBean {
+
+    private String url;
+
+    public NetworkClient() {
+        System.out.println("생성자 호출, url = " + url);
+        connect();
+        call("초기화 연결 메세지");
+    }
+
+    public void setUrl(String url) {
+        this.url = url;
+    }
+
+    // 서비스 시작시 호출
+    public void connect() {
+        System.out.println("connect: " + url);
+    }
+
+    public void call(String message) {
+        System.out.println("call: " + url + " message = " + message);
+    }
+
+    // 서비스 종료시 호출
+    public void disconnect(){
+        System.out.println("close = " + url);
+    }
+
+    @Override
+    public void destroy() throws Exception {
+        System.out.println("destroy");
+        disconnect();
+    }
+
+    // spring bean 이 생성된 이후
+    @Override
+    public void afterPropertiesSet() throws Exception {
+        System.out.println("afterPropertiesSet");
+        connect();
+        call("초기화 연결 메시지");
+    }
+}
+```
+
+사실 @PostConstruct, @PreDestroy 쓰면 된다.
+
+추가 학습할 것 AutoClosable
+
+## 빈 스코프
+1. 싱글톤
+2. 프로토타입 => 초기화 메서드는 호출 하지만 종료 콜백은 호출되지 않음(@Destroy 호출 X)
+3. request (Spring Web 관련)
+
+2, 3 의 경우 주입 시점에 
